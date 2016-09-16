@@ -695,12 +695,28 @@ void processor_t::register_base_instructions()
   build_opcode_map();
 }
 
+void processor_t::set_software_interrupt(bool x)
+{
+  if (x)
+    state.mip |= MIP_MSIP;
+  else
+    state.mip &= ~MIP_MSIP;
+}
+
 void processor_t::set_timer_interrupt(bool x)
 {
   if (x)
     state.mip |= MIP_MTIP;
   else
     state.mip &= ~MIP_MTIP;
+}
+
+void processor_t::set_external_interrupt(bool x)
+{
+  if (x)
+    state.mip |= MIP_MEIP;
+  else
+    state.mip &= ~MIP_MEIP;
 }
 
 bool processor_t::load(reg_t addr, size_t len, uint8_t* bytes)
@@ -713,9 +729,10 @@ bool processor_t::store(reg_t addr, size_t len, const uint8_t* bytes)
   switch (addr)
   {
     case 0:
-      state.mip &= ~MIP_MSIP;
       if (bytes[0] & 1)
-        state.mip |= MIP_MSIP;
+        set_software_interrupt(true);
+      else
+        set_software_interrupt(false);
       return true;
 
     default:

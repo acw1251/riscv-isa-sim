@@ -184,7 +184,9 @@ public:
   void register_insn(insn_desc_t);
   void register_extension(extension_t*);
 
+  void set_software_interrupt(bool);
   void set_timer_interrupt(bool);
+  void set_external_interrupt(bool);
 
   // MMIO slave interface
   bool load(reg_t addr, size_t len, uint8_t* bytes);
