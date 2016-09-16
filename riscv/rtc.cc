@@ -27,8 +27,8 @@ void rtc_t::increment(reg_t inc)
 {
   regs[0] += inc;
   for (size_t i = 0; i < procs.size(); i++) {
-    procs[i]->state.mip &= ~MIP_MTIP;
+    procs[i]->set_timer_interrupt(false);
     if (regs[0] >= regs[1+i])
-      procs[i]->state.mip |= MIP_MTIP;
+      procs[i]->set_timer_interrupt(true);
   }
 }

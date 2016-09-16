@@ -695,6 +695,14 @@ void processor_t::register_base_instructions()
   build_opcode_map();
 }
 
+void processor_t::set_timer_interrupt(bool x)
+{
+  if (x)
+    state.mip |= MIP_MTIP;
+  else
+    state.mip &= ~MIP_MTIP;
+}
+
 bool processor_t::load(reg_t addr, size_t len, uint8_t* bytes)
 {
   return false;
