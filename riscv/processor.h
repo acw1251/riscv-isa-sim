@@ -31,6 +31,12 @@ struct commit_log_reg_t
   reg_t data;
 };
 
+struct execution_cache_entry_t {
+  reg_t tag;
+  insn_t insn;
+  insn_func_t func;
+};
+
 typedef struct
 {
   uint8_t prv;
@@ -188,6 +194,8 @@ public:
   void set_timer_interrupt(bool);
   void set_external_interrupt(bool);
 
+  void fence_i();
+
   // MMIO slave interface
   bool load(reg_t addr, size_t len, uint8_t* bytes);
   bool store(reg_t addr, size_t len, const uint8_t* bytes);
@@ -300,6 +308,14 @@ private:
 
   static const size_t OPCODE_CACHE_SIZE = 8191;
   insn_desc_t opcode_cache[OPCODE_CACHE_SIZE];
+
+  // Execution Cache
+  size_t execution_cache_index(reg_t);
+  execution_cache_entry_t* execution_cache_lookup(reg_t);
+  execution_cache_entry_t* refill_execution_cache(reg_t, execution_cache_entry_t*);
+  static const size_t execution_cache_size = 1024;
+  execution_cache_entry_t execution_cache[execution_cache_size];
+  const size_t execution_cache_default_increment = 2;
 
   void check_timer();
   void take_interrupt(); // take a trap if any interrupts are pending

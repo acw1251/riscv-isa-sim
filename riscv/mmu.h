@@ -18,16 +18,12 @@
 const reg_t PGSIZE = 1 << PGSHIFT;
 const reg_t PGMASK = ~(PGSIZE-1);
 
+// The processor may use a cache to improve simulation performance, so the
+// processor needs to know if it can cache an instruction fetch result.
 struct insn_fetch_t
 {
-  insn_func_t func;
+  bool cacheable;
   insn_t insn;
-};
-
-struct icache_entry_t {
-  reg_t tag;
-  reg_t pad;
-  insn_fetch_t data;
 };
 
 class trigger_matched_t
@@ -111,14 +107,10 @@ public:
   store_func(uint32)
   store_func(uint64)
 
+  // this is necessary for gen_icache
   static const reg_t ICACHE_ENTRIES = 1024;
 
-  inline size_t icache_index(reg_t addr)
-  {
-    return (addr / PC_ALIGN) % ICACHE_ENTRIES;
-  }
-
-  inline icache_entry_t* refill_icache(reg_t addr, icache_entry_t* entry)
+  inline insn_fetch_t load_insn(reg_t addr)
   {
     const uint16_t* iaddr = translate_insn_addr(addr);
     insn_bits_t insn = *iaddr;
@@ -138,30 +130,15 @@ public:
       insn |= (insn_bits_t)*(const uint16_t*)translate_insn_addr(addr + 2) << 16;
     }
 
-    insn_fetch_t fetch = {proc->decode_insn(insn), insn};
-    entry->tag = addr;
-    entry->data = fetch;
-
+    insn_fetch_t fetch = {true, insn};
     reg_t paddr = sim->mem_to_addr((char*)iaddr);
     if (tracer.interested_in_range(paddr, paddr + 1, FETCH)) {
-      entry->tag = -1;
+      // if this instruction is being traced by a tracer, mark it as not
+      // cacheable so this function gets called every time to trace it
+      fetch.cacheable = false;
       tracer.trace(paddr, length, FETCH);
     }
-    return entry;
-  }
-
-  inline icache_entry_t* access_icache(reg_t addr)
-  {
-    icache_entry_t* entry = &icache[icache_index(addr)];
-    if (likely(entry->tag == addr))
-      return entry;
-    return refill_icache(addr, entry);
-  }
-
-  inline insn_fetch_t load_insn(reg_t addr)
-  {
-    icache_entry_t entry;
-    return refill_icache(addr, &entry)->data;
+    return fetch;
   }
 
   void flush_tlb();
@@ -174,9 +151,6 @@ private:
   processor_t* proc;
   memtracer_list_t tracer;
   uint16_t fetch_temp;
-
-  // implement an instruction cache for simulator performance
-  icache_entry_t icache[ICACHE_ENTRIES];
 
   // implement a TLB for simulator performance
   static const reg_t TLB_ENTRIES = 256;

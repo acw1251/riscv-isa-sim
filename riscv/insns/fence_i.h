@@ -1,1 +1,1 @@
-MMU.flush_icache();
+p->fence_i();

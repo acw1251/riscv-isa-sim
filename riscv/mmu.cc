@@ -20,8 +20,8 @@ mmu_t::~mmu_t()
 
 void mmu_t::flush_icache()
 {
-  for (size_t i = 0; i < ICACHE_ENTRIES; i++)
-    icache[i].tag = -1;
+  // This MMU implementation has no icache-like caching mechanism. Instead,
+  // each processor has an execution cache to improve simulation performance.
 }
 
 void mmu_t::flush_tlb()

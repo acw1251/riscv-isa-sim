@@ -719,6 +719,14 @@ void processor_t::set_external_interrupt(bool x)
     state.mip &= ~MIP_MEIP;
 }
 
+void processor_t::fence_i()
+{
+  for (size_t i = 0 ; i < execution_cache_size ; i++) {
+    execution_cache[i].tag = -1;
+  }
+  mmu->flush_icache();
+}
+
 bool processor_t::load(reg_t addr, size_t len, uint8_t* bytes)
 {
   return false;

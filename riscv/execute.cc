@@ -40,12 +40,12 @@ inline void processor_t::update_histogram(reg_t pc)
 #endif
 }
 
-static reg_t execute_insn(processor_t* p, reg_t pc, insn_fetch_t fetch)
+static reg_t execute_insn(processor_t* p, reg_t pc, insn_t insn, insn_func_t func)
 {
   commit_log_stash_privilege(p->get_state());
-  reg_t npc = fetch.func(p, fetch.insn, pc);
+  reg_t npc = func(p, insn, pc);
   if (!invalid_pc(npc)) {
-    commit_log_print_insn(p->get_state(), pc, fetch.insn);
+    commit_log_print_insn(p->get_state(), pc, insn);
     p->update_histogram(pc);
   }
   return npc;
@@ -104,9 +104,10 @@ void processor_t::step(size_t n)
           }
 
           insn_fetch_t fetch = mmu->load_insn(pc);
+          insn_func_t func = decode_insn(fetch.insn);
           if (debug && !state.serialized)
             disasm(fetch.insn);
-          pc = execute_insn(this, pc, fetch);
+          pc = execute_insn(this, pc, fetch.insn, func);
           bool serialize_before = (pc == PC_SERIALIZE_BEFORE);
 
           advance_pc();
@@ -121,15 +122,24 @@ void processor_t::step(size_t n)
       }
       else while (instret < n)
       {
-        size_t idx = _mmu->icache_index(pc);
-        auto ic_entry = _mmu->access_icache(pc);
+        // fast path - uses the execution cache to run faster
+        size_t idx = execution_cache_index(pc);
+        auto ec_entry = execution_cache_lookup(pc);
 
+        // Use an icache-like model to help the host machine's next address
+        // predictor when calling the decoded instruction. Calls to decoded
+        // instructions are located in different positions corresponding to
+        // their location in the icache in the MMU.
+        //
+        // This structure isn't exactly direct mapped since the refill
+        // mechanism can insert the next instruction into the next index even
+        // though the next instruction may be 4 bytes away and the next index
+        // may correspond to a location 2 bytes away.
         #define ICACHE_ACCESS(i) { \
-          insn_fetch_t fetch = ic_entry->data; \
-          ic_entry++; \
-          pc = execute_insn(this, pc, fetch); \
-          if (i == mmu_t::ICACHE_ENTRIES-1) break; \
-          if (unlikely(ic_entry->tag != pc)) goto miss; \
+          pc = execute_insn(this, pc, ec_entry->insn, ec_entry->func); \
+          ec_entry++; \
+          if (i == execution_cache_size-1) break; \
+          if (unlikely(ec_entry->tag != pc)) goto miss; \
           if (unlikely(instret+1 == n)) break; \
           instret++; \
           state.pc = pc; \
@@ -145,8 +155,8 @@ void processor_t::step(size_t n)
 miss:
         advance_pc();
         // refill I$ if it looks like there wasn't a taken branch
-        if (pc > (ic_entry-1)->tag && pc <= (ic_entry-1)->tag + MAX_INSN_LENGTH)
-          _mmu->refill_icache(pc, ic_entry);
+        if (pc > (ec_entry-1)->tag && pc <= (ec_entry-1)->tag + MAX_INSN_LENGTH)
+          refill_execution_cache(pc, ec_entry);
       }
     }
     catch(trap_t& t)
@@ -163,7 +173,8 @@ miss:
         // instructions are idempotent so restarting is safe.)
 
         insn_fetch_t fetch = mmu->load_insn(pc);
-        pc = execute_insn(this, pc, fetch);
+        insn_func_t func = decode_insn(fetch.insn);
+        pc = execute_insn(this, pc, fetch.insn, func);
         advance_pc();
 
         delete mmu->matched_trigger;
@@ -186,4 +197,33 @@ miss:
     state.minstret += instret;
     n -= instret;
   }
+}
+
+// Performance optimizations for execution
+size_t processor_t::execution_cache_index(reg_t addr)
+{
+  return (addr / execution_cache_default_increment) % execution_cache_size;
+}
+
+execution_cache_entry_t* processor_t::execution_cache_lookup(reg_t addr)
+{
+  execution_cache_entry_t* entry = &execution_cache[execution_cache_index(addr)];
+  if (likely(entry->tag == addr))
+    return entry;
+  return refill_execution_cache(addr, entry);
+}
+
+execution_cache_entry_t* processor_t::refill_execution_cache(reg_t addr, execution_cache_entry_t* entry)
+{
+    insn_fetch_t fetch = mmu->load_insn(addr);
+    if (!fetch.cacheable) {
+      // not cacheable
+      entry->tag = -1;
+    } else {
+      // cacheable
+      entry->tag = addr;
+    }
+    entry->insn = fetch.insn;
+    entry->func = decode_insn(fetch.insn);
+    return entry;
 }
