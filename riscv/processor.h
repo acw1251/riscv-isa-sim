@@ -194,6 +194,7 @@ public:
   void set_timer_interrupt(bool);
   void set_external_interrupt(bool);
 
+  void flush_execution_cache();
   void fence_i();
   void sfence_vm();
 

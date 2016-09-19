@@ -190,6 +190,7 @@ void processor_t::set_privilege(reg_t prv)
   assert(prv <= PRV_M);
   if (prv == PRV_H)
     prv = PRV_U;
+  flush_execution_cache();
   mmu->flush_tlb();
   state.prv = prv;
 }
@@ -308,8 +309,10 @@ void processor_t::set_csr(int which, reg_t val)
       break;
     case CSR_MSTATUS: {
       if ((val ^ state.mstatus) &
-          (MSTATUS_VM | MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_PUM | MSTATUS_MXR))
+          (MSTATUS_VM | MSTATUS_MPP | MSTATUS_MPRV | MSTATUS_PUM | MSTATUS_MXR)) {
+        flush_execution_cache();
         mmu->flush_tlb();
+      }
 
       reg_t mask = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_MIE | MSTATUS_MPIE
                  | MSTATUS_SPP | MSTATUS_FS | MSTATUS_MPRV | MSTATUS_PUM
@@ -719,15 +722,20 @@ void processor_t::set_external_interrupt(bool x)
     state.mip &= ~MIP_MEIP;
 }
 
-void processor_t::fence_i()
+void processor_t::flush_execution_cache()
 {
   memset(execution_cache, -1, sizeof(execution_cache));
+}
+
+void processor_t::fence_i()
+{
+  flush_execution_cache();
   mmu->flush_icache();
 }
 
 void processor_t::sfence_vm()
 {
-  memset(execution_cache, -1, sizeof(execution_cache));
+  flush_execution_cache();
   mmu->flush_tlb();
 }
 
@@ -754,6 +762,7 @@ bool processor_t::store(reg_t addr, size_t len, const uint8_t* bytes)
 
 void processor_t::trigger_updated()
 {
+  flush_execution_cache();
   mmu->flush_tlb();
   mmu->check_triggers_fetch = false;
   mmu->check_triggers_load = false;
