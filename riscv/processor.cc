@@ -764,19 +764,20 @@ void processor_t::trigger_updated()
 {
   flush_execution_cache();
   mmu->flush_tlb();
-  mmu->check_triggers_fetch = false;
-  mmu->check_triggers_load = false;
-  mmu->check_triggers_store = false;
+
+  mmu->set_check_triggers_fetch(false);
+  mmu->set_check_triggers_load(false);
+  mmu->set_check_triggers_store(false);
 
   for (unsigned i = 0; i < state.num_triggers; i++) {
     if (state.mcontrol[i].execute) {
-      mmu->check_triggers_fetch = true;
+      mmu->set_check_triggers_fetch(true);
     }
     if (state.mcontrol[i].load) {
-      mmu->check_triggers_load = true;
+      mmu->set_check_triggers_load(true);
     }
     if (state.mcontrol[i].store) {
-      mmu->check_triggers_store = true;
+      mmu->set_check_triggers_store(true);
     }
   }
 }

@@ -147,6 +147,19 @@ public:
   void flush_tlb();
   void flush_icache();
 
+  void set_check_triggers_fetch(bool x)
+  {
+    check_triggers_fetch = x;
+  }
+  void set_check_triggers_load(bool x)
+  {
+    check_triggers_load = x;
+  }
+  void set_check_triggers_store(bool x)
+  {
+    check_triggers_load = x;
+  }
+
   void register_memtracer(memtracer_t*);
 
 private:
