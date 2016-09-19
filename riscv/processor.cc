@@ -721,10 +721,14 @@ void processor_t::set_external_interrupt(bool x)
 
 void processor_t::fence_i()
 {
-  for (size_t i = 0 ; i < execution_cache_size ; i++) {
-    execution_cache[i].tag = -1;
-  }
+  memset(execution_cache, -1, sizeof(execution_cache));
   mmu->flush_icache();
+}
+
+void processor_t::sfence_vm()
+{
+  memset(execution_cache, -1, sizeof(execution_cache));
+  mmu->flush_tlb();
 }
 
 bool processor_t::load(reg_t addr, size_t len, uint8_t* bytes)

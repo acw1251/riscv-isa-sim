@@ -195,6 +195,7 @@ public:
   void set_external_interrupt(bool);
 
   void fence_i();
+  void sfence_vm();
 
   // MMIO slave interface
   bool load(reg_t addr, size_t len, uint8_t* bytes);

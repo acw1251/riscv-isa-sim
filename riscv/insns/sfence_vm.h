@@ -1,2 +1,2 @@
 require_privilege(PRV_S);
-MMU.flush_tlb();
+p->sfence_vm();
