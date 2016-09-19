@@ -17,6 +17,7 @@
 #define PGSHIFT 12
 const reg_t PGSIZE = 1 << PGSHIFT;
 const reg_t PGMASK = ~(PGSIZE-1);
+const reg_t PGOFFSETMASK = PGSIZE-1;
 
 // The processor may use a cache to improve simulation performance, so the
 // processor needs to know if it can cache an instruction fetch result.
@@ -53,10 +54,11 @@ public:
       if (addr & (sizeof(type##_t)-1)) \
         throw trap_load_address_misaligned(addr); \
       reg_t vpn = addr >> PGSHIFT; \
+      reg_t offset = addr & PGOFFSETMASK; \
       if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) \
-        return *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr); \
+        return *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset); \
       if (unlikely(tlb_load_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
-        type##_t data = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr); \
+        type##_t data = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset); \
         if (!matched_trigger) { \
           matched_trigger = trigger_exception(OPERATION_LOAD, addr, data); \
           if (matched_trigger) \
@@ -87,15 +89,16 @@ public:
       if (addr & (sizeof(type##_t)-1)) \
         throw trap_store_address_misaligned(addr); \
       reg_t vpn = addr >> PGSHIFT; \
+      reg_t offset = addr & PGOFFSETMASK; \
       if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) \
-        *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr) = val; \
+        *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset) = val; \
       else if (unlikely(tlb_store_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
         if (!matched_trigger) { \
           matched_trigger = trigger_exception(OPERATION_STORE, addr, val); \
           if (matched_trigger) \
             throw *matched_trigger; \
         } \
-        *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + addr) = val; \
+        *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset) = val; \
       } \
       else \
         store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&val); \
@@ -178,10 +181,11 @@ private:
   // ITLB lookup
   inline const uint16_t* translate_insn_addr(reg_t addr) {
     reg_t vpn = addr >> PGSHIFT;
+    reg_t offset = addr & PGOFFSETMASK;
     if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn))
-      return (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + addr);
+      return (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + offset);
     if (unlikely(tlb_insn_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) {
-      uint16_t* ptr = (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + addr);
+      uint16_t* ptr = (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + offset);
       int match = proc->trigger_match(OPERATION_EXECUTE, addr, *ptr);
       if (match >= 0)
         throw trigger_matched_t(match, OPERATION_EXECUTE, addr, *ptr);

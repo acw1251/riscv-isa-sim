@@ -147,6 +147,7 @@ void mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, access_type type)
 {
   reg_t idx = (vaddr >> PGSHIFT) % TLB_ENTRIES;
   reg_t expected_tag = vaddr >> PGSHIFT;
+  reg_t offset = vaddr & PGOFFSETMASK;
 
   if ((tlb_load_tag[idx] & ~TLB_CHECK_TRIGGERS) != expected_tag)
     tlb_load_tag[idx] = -1;
@@ -164,7 +165,7 @@ void mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, access_type type)
   else if (type == STORE) tlb_store_tag[idx] = expected_tag;
   else tlb_load_tag[idx] = expected_tag;
 
-  tlb_data[idx] = sim->addr_to_mem(paddr) - vaddr;
+  tlb_data[idx] = sim->addr_to_mem(paddr) - offset;
 }
 
 reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode)
