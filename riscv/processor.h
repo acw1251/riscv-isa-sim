@@ -119,6 +119,7 @@ struct state_t
   reg_t stvec;
   reg_t sptbr;
   reg_t scause;
+  // debugging csrs
   reg_t dpc;
   reg_t dscratch;
   dcsr_t dcsr;
@@ -217,6 +218,8 @@ public:
 
     for (unsigned int i = 0; i < state.num_triggers; i++) {
       if (!chain_ok) {
+        // this trigger can only match if the previous trigger matched, but
+        // the previous trigger did not match
         chain_ok |= !state.mcontrol[i].chain;
         continue;
       }

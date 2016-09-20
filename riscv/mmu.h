@@ -55,14 +55,14 @@ public:
         throw trap_load_address_misaligned(addr); \
       reg_t vpn = addr >> PGSHIFT; \
       reg_t offset = addr & PGOFFSETMASK; \
-      if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) \
-        return *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset); \
-      if (unlikely(tlb_load_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
+      if (likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) { \
         type##_t data = *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset); \
-        if (!matched_trigger) { \
-          matched_trigger = trigger_exception(OPERATION_LOAD, addr, data); \
-          if (matched_trigger) \
-            throw *matched_trigger; \
+        if (unlikely(check_triggers_load)) { \
+          if (likely(!matched_trigger)) { \
+            matched_trigger = trigger_exception(OPERATION_LOAD, addr, data); \
+            if (matched_trigger) \
+              throw *matched_trigger; \
+          } \
         } \
         return data; \
       } \
@@ -90,13 +90,13 @@ public:
         throw trap_store_address_misaligned(addr); \
       reg_t vpn = addr >> PGSHIFT; \
       reg_t offset = addr & PGOFFSETMASK; \
-      if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) \
-        *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset) = val; \
-      else if (unlikely(tlb_store_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
-        if (!matched_trigger) { \
-          matched_trigger = trigger_exception(OPERATION_STORE, addr, val); \
-          if (matched_trigger) \
-            throw *matched_trigger; \
+      if (likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) { \
+        if (unlikely(check_triggers_store)) { \
+          if (likely(!matched_trigger)) { \
+            matched_trigger = trigger_exception(OPERATION_STORE, addr, val); \
+            if (matched_trigger) \
+              throw *matched_trigger; \
+          } \
         } \
         *(type##_t*)(tlb_data[vpn % TLB_ENTRIES] + offset) = val; \
       } \
@@ -140,6 +140,8 @@ public:
       // cacheable so this function gets called every time to trace it
       fetch.cacheable = false;
       tracer.trace(paddr, length, FETCH);
+    } else if (check_triggers_fetch) {
+      fetch.cacheable = false;
     }
     return fetch;
   }
@@ -195,13 +197,19 @@ private:
   inline const uint16_t* translate_insn_addr(reg_t addr) {
     reg_t vpn = addr >> PGSHIFT;
     reg_t offset = addr & PGOFFSETMASK;
-    if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn))
-      return (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + offset);
-    if (unlikely(tlb_insn_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) {
+    if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn)) {
       uint16_t* ptr = (uint16_t*)(tlb_data[vpn % TLB_ENTRIES] + offset);
-      int match = proc->trigger_match(OPERATION_EXECUTE, addr, *ptr);
-      if (match >= 0)
-        throw trigger_matched_t(match, OPERATION_EXECUTE, addr, *ptr);
+      if (unlikely(check_triggers_fetch)) {
+        int match = proc->trigger_match(OPERATION_EXECUTE, addr, *ptr);
+        if (match >= 0)
+          throw trigger_matched_t(match, OPERATION_EXECUTE, addr, *ptr);
+        // XXX: This is what the load and store macros do
+        // if (likely(!matched_trigger)) {
+        //   matched_trigger = trigger_exception(OPERATION_EXECUTE, addr, *ptr);
+        //   if (matched_trigger)
+        //     throw *matched_trigger;
+        // }
+      }
       return ptr;
     }
     return fetch_slow_path(addr);
