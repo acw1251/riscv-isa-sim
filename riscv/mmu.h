@@ -157,7 +157,7 @@ public:
   }
   void set_check_triggers_store(bool x)
   {
-    check_triggers_load = x;
+    check_triggers_store = x;
   }
 
   void register_memtracer(memtracer_t*);
